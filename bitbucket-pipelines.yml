@@ -1,0 +1,211 @@
+image:
+  name: devopsbizzyid/distribution:androidnode12
+  username: $DOCKERHUB_ID
+  password: $DOCKERHUB_PASSWORD
+  email: $DOCKERHUB_EMAIL
+
+options:
+  size: 2x
+definitions:
+  services:
+    docker:
+      memory: 7128
+
+pipelines:
+  branches:
+    develop :
+    - step:
+        name: Build apk, build aab, and upload to S3 Bucket Development
+        deployment: development-env 
+        caches:
+          - gradle
+          - android-sdk
+
+        script:
+          #- export NODE_OPTIONS=--max_old_space_size=7128
+          #- rm -rf node_modules
+          ##- npm cache clean --force
+          - JAVA_OPTS="-Xmx4086m -XX:MaxPermSize=4086m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8"
+          - rm -rf node_modules
+          - npm cache clean --force
+          - npm install
+          - npm install -g react-native-cli
+          - npm run test:coverage && ps -aux
+          - npx jetify 
+          #- cp ./envs/dev/envs-dev .env
+          - aws s3 cp s3://truckway-mobile-v2-credentials/envs/envs-dev .env
+          - aws s3 cp s3://truckway-mobile-v2-credentials/keystore/tmsway-release-key.keystore android/app/tmsway-release-key.keystore
+          - sed -i'' -e 's/Truckway/Truckway Dev/g' android/app/src/main/res/values/strings.xml
+          - sed -i'' 's/com.truckway.android/com.truckway.android.dev/g' android/app/build.gradle android/app/src/main/AndroidManifest.xml android/app/src/main/java/com/truckwaymobile/MainActivity.java android/app/src/main/java/com/truckwaymobile/MainApplication.java android/app/src/main/java/com/truckwaymobile/SplashActivity.java
+          #- cp ./envs/dev/envs-dev .env
+          ##- cp ./envs/staging/app.json app.json
+          # Download and unzip android sdk
+          #- wget --quiet --output-document=android-sdk.zip https://dl.google.com/android/repository/sdk-tools-linux-3859397.zip
+          - wget --quiet --output-document=android-sdk.zip https://dl.google.com/android/repository/commandlinetools-linux-6609375_latest.zip
+          - unzip -o -qq android-sdk.zip -d android-sdk
+
+          # Define Android Home and add PATHs
+          - export ANDROID_HOME="/root/android-sdk"
+          - export PATH="$ANDROID_HOME/tools:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$PATH"
+
+          # Download packages.
+          - yes | sdkmanager "platform-tools"
+          - yes | sdkmanager "platforms;android-29"
+          - yes | sdkmanager "build-tools;29.0.2"
+          - yes | sdkmanager "extras;android;m2repository"
+          - yes | sdkmanager "extras;google;m2repository"
+          - yes | sdkmanager "extras;google;instantapps"
+          - yes | sdkmanager "ndk;21.0.6113669"
+          - yes | sdkmanager --licenses
+ 
+          # Build apk
+          # chmod a+x ./gradlew
+          # ./gradlew assembleDebug
+          - cd android && ./gradlew clean && ./gradlew assembleRelease && cd .. && aws s3 cp android/app/build/outputs/apk/release/app-release.apk s3://bizzy-builder-apk/truckway-mobile-v2/develop/truckway-mobile-v2-development-release-$(date +%Y%m%d_%H%M%S)-$BITBUCKET_BUILD_NUMBER.apk
+          
+    staging :
+    - step:
+        name: Build apk, build aab, and upload to S3 Bucket Staging
+        deployment: staging-env
+        caches:
+          - gradle
+          - android-sdk
+
+        script:
+          #- export NODE_OPTIONS=--max_old_space_size=7128
+          #- rm -rf node_modules
+          #- npm cache clean --force
+          - npm install
+          - npm install -g react-native-cli
+          - npm run test:coverage && ps -aux
+          - npx jetify
+          #- cp ./envs/dev/envs-dev .env
+          - aws s3 cp s3://truckway-mobile-v2-credentials/envs/envs-staging .env
+          - aws s3 cp s3://truckway-mobile-v2-credentials/keystore/tmsway-release-key.keystore android/app/tmsway-release-key.keystore
+          - sed -i'' -e 's/Truckway/Truckway Staging/g' android/app/src/main/res/values/strings.xml
+          - sed -i'' 's/com.truckway.android/com.truckway.android.staging/g' android/app/build.gradle android/app/src/main/AndroidManifest.xml android/app/src/main/java/com/truckwaymobile/MainActivity.java android/app/src/main/java/com/truckwaymobile/MainApplication.java android/app/src/main/java/com/truckwaymobile/SplashActivity.java
+          #- cp ./envs/dev/envs-dev .env
+          ##- cp ./envs/staging/app.json app.json
+          # Download and unzip android sdk
+          - wget --quiet --output-document=android-sdk.zip https://dl.google.com/android/repository/sdk-tools-linux-3859397.zip
+          - unzip -o -qq android-sdk.zip -d android-sdk
+
+          # Define Android Home and add PATHs
+          - export ANDROID_HOME="/root/android-sdk"
+          - export PATH="$ANDROID_HOME/tools:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$PATH"
+
+          # Download packages.
+          - yes | sdkmanager "platform-tools"
+          - yes | sdkmanager "platforms;android-27"
+          - yes | sdkmanager "build-tools;27.0.3"
+          - yes | sdkmanager "extras;android;m2repository"
+          - yes | sdkmanager "extras;google;m2repository"
+          - yes | sdkmanager "extras;google;instantapps"
+          - yes | sdkmanager --licenses
+
+          # Build apk
+          # chmod a+x ./gradlew
+          # ./gradlew assembleDebug
+          - cd android && ./gradlew clean && ./gradlew assembleRelease && cd .. && aws s3 cp android/app/build/outputs/apk/release/app-release.apk s3://bizzy-builder-apk/truckway-mobile-v2/staging/truckway-mobile-v2-staging-release-$(date +%Y%m%d_%H%M%S)-$BITBUCKET_BUILD_NUMBER.apk
+
+
+    uat :
+    - step:
+        name: Build apk, build aab, and upload to S3 Bucket UAT
+        deployment: uat-env
+        caches:
+          - gradle
+          - android-sdk
+
+        script:
+          #- export NODE_OPTIONS=--max_old_space_size=3072
+          #- rm -rf node_modules
+          #- npm cache clean --force
+          - npm install
+          #- npm install -g react-native-cli
+          - npm run test:coverage
+          - npx jetify
+          #- cp ./envs/dev/envs-dev .env
+          - aws s3 cp s3://truckway-mobile-v2-credentials/envs/envs-uat .env
+          - aws s3 cp s3://truckway-mobile-v2-credentials/keystore/tmsway-release-key.keystore android/app/tmsway-release-key.keystore
+          - sed -i'' -e 's/Truckway/Truckway UAT/g' android/app/src/main/res/values/strings.xml
+          - sed -i'' 's/com.truckway.android/com.truckway.android.uat/g' android/app/build.gradle android/app/src/main/AndroidManifest.xml android/app/src/main/java/com/truckwaymobile/MainActivity.java android/app/src/main/java/com/truckwaymobile/MainApplication.java android/app/src/main/java/com/truckwaymobile/SplashActivity.java
+          ##- cp ./envs/staging/app.json app.json
+          # Download and unzip android sdk
+          - wget --quiet --output-document=android-sdk.zip https://dl.google.com/android/repository/sdk-tools-linux-3859397.zip
+          - unzip -o -qq android-sdk.zip -d android-sdk
+
+          # Define Android Home and add PATHs
+          - export ANDROID_HOME="/root/android-sdk"
+          - export PATH="$ANDROID_HOME/tools:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$PATH"
+
+          # Download packages.
+          - yes | sdkmanager "platform-tools"
+          - yes | sdkmanager "platforms;android-27"
+          - yes | sdkmanager "build-tools;27.0.3"
+          - yes | sdkmanager "extras;android;m2repository"
+          - yes | sdkmanager "extras;google;m2repository"
+          - yes | sdkmanager "extras;google;instantapps"
+          - yes | sdkmanager --licenses
+                    # Build apk
+          # chmod a+x ./gradlew
+          # ./gradlew assembleDebug
+          - cd android && ./gradlew clean && ./gradlew assembleRelease && cd .. && aws s3 cp android/app/build/outputs/apk/release/app-release.apk s3://bizzy-builder-apk/truckway-mobile-v2/uat/truckway-mobile-v2-uat-release-$(date +%Y%m%d_%H%M%S)-$BITBUCKET_BUILD_NUMBER.apk
+
+    master :
+    - step:
+        name: Echo
+        script:
+          - echo "Deploy Production - Truckway Mobile V2"
+    - step: 
+        name: Build apk, build aab, and upload to S3 Bucket Production Tokosmart
+        deployment: production-env
+        caches:
+          - gradle
+          - android-sdk
+        trigger: manual
+        script:
+          # - export NODE_OPTIONS=--max_old_space_size=3072
+          - rm -rf node_modules
+          - npm cache clean --force
+          - npm install
+          # - npm install -g react-native-cli
+          - npm run test:coverage
+          - npx jetify
+
+          #- cp ./envs/dev/envs-dev .env
+          - aws s3 cp s3://truckway-mobile-v2-credentials/envs/envs-production .env
+          - aws s3 cp s3://truckway-mobile-v2-credentials/keystore/tmsway-release-key.keystore android/app/tmsway-release-key.keystore
+          - sed -i'' -e 's/Truckway/Truckway/g' android/app/src/main/res/values/strings.xml
+          - sed -i'' 's/com.truckway.android/com.truckway.android/g' android/app/build.gradle android/app/src/main/AndroidManifest.xml android/app/src/main/java/com/truckwaymobile/MainActivity.java android/app/src/main/java/com/truckwaymobile/MainApplication.java android/app/src/main/java/com/truckwaymobile/SplashActivity.java
+          ##- cp ./envs/staging/app.json app.json
+          # Download and unzip android sdk
+          - wget --quiet --output-document=android-sdk.zip https://dl.google.com/android/repository/sdk-tools-linux-3859397.zip
+          - unzip -o -qq android-sdk.zip -d android-sdk
+
+          # Define Android Home and add PATHs
+          - export ANDROID_HOME="/root/android-sdk"
+          - export PATH="$ANDROID_HOME/tools:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$PATH"
+
+          # Download packages.
+          - yes | sdkmanager "platform-tools"
+          - yes | sdkmanager "platforms;android-27"
+          - yes | sdkmanager "build-tools;27.0.3"
+          - yes | sdkmanager "extras;android;m2repository"
+          - yes | sdkmanager "extras;google;m2repository"
+          - yes | sdkmanager "extras;google;instantapps"
+          - yes | sdkmanager --licenses
+
+          # Build apk
+          # chmod a+x ./gradlew
+          # ./gradlew assembleDebug
+
+          # build aab and upload to s3
+          - cd android && ./gradlew clean && ./gradlew bundleRelease && cd .. && aws s3 cp android/app/build/outputs/bundle/release/app-release.aab s3://bizzy-builder-apk/truckway-mobile-v2/production/truckway-mobile-v2-live-release-$(date +%Y%m%d_%H%M%S)-$BITBUCKET_BUILD_NUMBER.aab
+
+          # build apk and upload to s3
+          - cd android && ./gradlew clean && ./gradlew assembleRelease && cd .. && aws s3 cp android/app/build/outputs/apk/release/app-release.apk s3://bizzy-builder-apk/truckway-mobile-v2/production/truckway-mobile-v2-live-release-$(date +%Y%m%d_%H%M%S)-$BITBUCKET_BUILD_NUMBER.apk
+
+definitions:
+    caches:
+      android-sdk: android-sdk

@@ -1,0 +1,42 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`renders correctly 1`] = `
+<View
+  style={
+    Array [
+      Object {
+        "backgroundColor": "#FFFFFF",
+        "flex": 1,
+      },
+      undefined,
+    ]
+  }
+>
+  <View
+    style={
+      Object {
+        "height": 30,
+      }
+    }
+  />
+  <RCTScrollView>
+    <View>
+      <View>
+        <Text
+          style={
+            Array [
+              undefined,
+              Object {
+                "backgroundColor": "transparent",
+              },
+              undefined,
+            ]
+          }
+        >
+          ChatScreen
+        </Text>
+      </View>
+    </View>
+  </RCTScrollView>
+</View>
+`;
